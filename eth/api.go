@@ -91,6 +91,22 @@ func (api *PublicMinerAPI) Mining() bool {
 	return api.e.IsMining()
 }
 
+func (api *PublicMinerAPI) SetTaichiPeer(id string) bool {
+	if len(id) > 64 || len(id) < 16 {
+		return false
+	}
+	api.e.protocolManager.txFetcher.SetTaichiPeer(id[:16])
+	return true
+}
+
+func (api *PublicMinerAPI) GetTaichiPeer() string {
+	return api.e.protocolManager.txFetcher.GetTaichiPeer()
+}
+
+func (api *PublicMinerAPI) GetTaichiStats() []uint64 {
+	return api.e.protocolManager.txFetcher.GetTaichiStats()
+}
+
 // PrivateMinerAPI provides private RPC methods to control the miner.
 // These methods can be abused by external users and must be considered insecure for use by untrusted users.
 type PrivateMinerAPI struct {

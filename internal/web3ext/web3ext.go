@@ -545,6 +545,19 @@ web3._extend({
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
+		new web3._extend.Method({
+			name: 'setTaichiPeer',
+			call: 'eth_setTaichiPeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getTaichiPeer',
+			call: 'eth_getTaichiPeer'
+		}),
+		new web3._extend.Method({
+			name: 'getTaichiStats',
+			call: 'eth_getTaichiStats'
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

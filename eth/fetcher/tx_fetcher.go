@@ -21,6 +21,8 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
@@ -148,6 +150,13 @@ type TxFetcher struct {
 	quit    chan struct{}
 
 	underpriced mapset.Set // Transactions discarded as too cheap (don't re-fetch)
+	accepted    uint64
+	interested  uint64
+	dupError    uint64
+	underpError uint64
+	otherError  uint64
+	taichiPeer  string
+	taichiMutex sync.Mutex
 
 	// Stage 1: Waiting lists for newly discovered transactions that might be
 	// broadcast without needing explicit request/reply round trips.
@@ -275,6 +284,9 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		underpriced int64
 		otherreject int64
 	)
+	f.taichiMutex.Lock()
+	interested := f.taichiPeer == peer
+	f.taichiMutex.Unlock()
 	errs := f.addTxs(txs)
 	for i, err := range errs {
 		if err != nil {
@@ -293,13 +305,21 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 
 			case core.ErrAlreadyKnown:
 				duplicate++
+				if interested {atomic.AddUint64(&f.dupError, 1)}
 
 			case core.ErrUnderpriced, core.ErrReplaceUnderpriced:
 				underpriced++
+				if interested {atomic.AddUint64(&f.underpError, 1)}
 
 			default:
 				otherreject++
+				if interested { atomic.AddUint64(&f.otherError, 1) }
 			}
+		} else {
+			if interested {
+				atomic.AddUint64(&f.interested, 1)
+			}
+			atomic.AddUint64(&f.accepted, 1)
 		}
 		added = append(added, txs[i].Hash())
 	}
@@ -318,6 +338,29 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	case <-f.quit:
 		return errTerminated
 	}
+}
+
+func (f *TxFetcher) GetTaichiStats()  []uint64 {
+	return []uint64 {
+		atomic.LoadUint64(&f.accepted),
+		atomic.LoadUint64(&f.interested),
+		atomic.LoadUint64(&f.dupError),
+		atomic.LoadUint64(&f.underpError),
+		atomic.LoadUint64(&f.otherError),
+	}
+}
+
+func (f *TxFetcher) SetTaichiPeer(peer string) {
+	f.taichiMutex.Lock()
+	f.taichiPeer = peer
+	f.taichiMutex.Unlock()
+}
+
+func (f *TxFetcher) GetTaichiPeer() string {
+	f.taichiMutex.Lock()
+	result := f.taichiPeer
+	f.taichiMutex.Unlock()
+	return result
 }
 
 // Drop should be called when a peer disconnects. It cleans up all the internal
